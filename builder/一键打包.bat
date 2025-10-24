@@ -144,7 +144,7 @@ echo    - 首次连接需要在手机上确认授权
 echo.
 echo 2. 运行程序
 echo    - 双击 launcher.bat 启动程序
-echo    - 或直接双击 淘宝双11自动化工具.exe
+echo    - 或直接双击 淘宝双11自动化工具.exe(不建议直接运行exe,可能会无法自动运行,需要回车才能下一步)
 echo.
 echo 二、开启 USB 调试
 echo.

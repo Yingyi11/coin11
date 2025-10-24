@@ -295,6 +295,7 @@ def operate_task():
     back_count = 0
     max_back = 8
     consecutive_welcome = 0
+    must_back_once = True  # 标记是否必须至少后退一次
 
     while back_count < max_back:
         temp_package, temp_activity = get_current_app(d)
@@ -304,13 +305,22 @@ def operate_task():
 
         print(f"当前界面: {temp_package}--{temp_activity}")
 
-        # 优先检查：如果已经在任务界面，直接成功返回，不再后退
+        # 优先检查：如果已经在任务界面
         if (
             temp_package == "com.taobao.taobao"
             and temp_activity == "com.taobao.themis.container.app.TMSActivity"
         ):
-            print("✓ 已在任务列表界面，停止后退")
-            break
+            if must_back_once and back_count == 0:
+                # 第一次检测到任务界面，必须后退一次（因为可能刚完成任务还在任务详情页）
+                print("在任务界面，但需要至少后退一次确保回到任务列表")
+                d.press("back")
+                time.sleep(1)
+                back_count += 1
+                must_back_once = False
+                continue
+            else:
+                print("✓ 已在任务列表界面，停止后退")
+                break
 
         # 成功返回到任务列表（使用check_in_task进一步验证）
         if check_in_task():
@@ -353,29 +363,46 @@ def operate_task():
 
 def check_task_progress(target_count=40):
     """检查任务进度是否达到目标次数"""
+    # 先尝试滚动到页面顶部，确保进度信息可见
+    try:
+        d.swipe(screen_width // 2, screen_height // 3, screen_width // 2, screen_height * 2 // 3, 0.3)
+        time.sleep(1)
+    except:
+        pass
+    
     # 查找"完成进度"或"当前进度"文本
     progress_texts = d(className="android.widget.TextView", textMatches=".*进度.*")
 
+    found_progress = False
     for progress_view in progress_texts:
         try:
             text = progress_view.get_text()
-            print(f"[进度检查] 找到进度文本: {text}")
 
             # 尝试从文本中提取数字，格式可能是 "完成进度 30/40" 或 "当前进度：30/40" 等
             match = re.search(r"(\d+)\s*/\s*(\d+)", text)
             if match:
+                found_progress = True
                 current = int(match.group(1))
                 total = int(match.group(2))
-                print(f"[进度检查] 当前进度: {current}/{total}")
+                print(f"[进度检查] 找到进度: {text} → 当前进度: {current}/{total}")
 
-                if current >= target_count or current >= total:
-                    print(f"✓ 已达到目标进度 ({current}/{total})")
+                if current >= target_count:
+                    print(f"✓ 已达到目标进度 {target_count}次 ({current}/{total})")
                     return True
+                elif current >= total:
+                    print(f"✓ 已完成全部进度 ({current}/{total})")
+                    return True
+                else:
+                    print(f"[进度检查] 未达到目标 (当前: {current}, 目标: {target_count})")
+                    return False
         except Exception as e:
             print(f"[进度检查] 解析进度失败: {e}")
             continue
 
-    print("[进度检查] 未找到进度信息或未达到目标")
+    if not found_progress:
+        print("[进度检查] ⚠ 未找到进度信息，可能页面未加载完成，继续执行任务")
+
+    # 如果没有找到进度信息，返回 False 继续执行任务（而不是结束）
     return False
 
 
@@ -387,6 +414,10 @@ time1 = time.time()
 print("\n" + "=" * 60)
 print("第一阶段：开始赚金币任务")
 print("=" * 60)
+
+no_task_count_coin = 0  # 连续未找到任务的计数
+max_no_task_coin = 3  # 最多连续3次未找到任务才退出
+
 while True:
     try:
         # 检查任务进度
@@ -399,7 +430,15 @@ while True:
         if get_btn.exists:
             get_btn.click()
             time.sleep(3)
+        
+        # 尝试滚动查找"去完成"按钮
         to_btn = d(className="android.widget.Button", text="去完成")
+        if not to_btn.exists:
+            print("[金币任务] 未找到'去完成'按钮，尝试向下滚动...")
+            d.swipe(screen_width // 2, screen_height * 2 // 3, screen_width // 2, screen_height // 3, 0.3)
+            time.sleep(2)
+            to_btn = d(className="android.widget.Button", text="去完成")
+        
         if to_btn.exists:
             need_click_view = None
             need_click_index = 0
@@ -442,12 +481,43 @@ while True:
                     in_search = True
                     time.sleep(4)
                 operate_task()
+                no_task_count_coin = 0  # 重置计数器
             else:
-                print("✓ 没有更多可执行的金币任务")
-                break
+                no_task_count_coin += 1
+                print(f"[金币任务] 未找到可执行任务 ({no_task_count_coin}/{max_no_task_coin})")
+                if no_task_count_coin >= max_no_task_coin:
+                    print("✓ 连续多次未找到可执行任务，结束金币任务")
+                    break
+                
+                # 返回淘金币主页重新进入任务页面
+                print("[金币任务] 返回淘金币主页重新进入...")
+                d.press("back")
+                time.sleep(2)
+                
+                # 重新点击"赚金币"进入任务页面
+                coin_btn = d(text="赚金币")
+                if not coin_btn.exists:
+                    coin_btn = d(textContains="赚金币")
+                
+                if coin_btn.exists:
+                    print("[金币任务] 重新点击'赚金币'进入任务列表...")
+                    bounds = coin_btn.info['bounds']
+                    center_x = (bounds['left'] + bounds['right']) // 2
+                    center_y = (bounds['top'] + bounds['bottom']) // 2
+                    d.click(center_x, center_y)
+                    time.sleep(3)
+                else:
+                    print("[金币任务] ⚠ 未找到'赚金币'按钮，可能需要重新导航")
         else:
-            print("✓ 没有更多金币任务")
-            break
+            no_task_count_coin += 1
+            print(f"[金币任务] 未找到'去完成'按钮 ({no_task_count_coin}/{max_no_task_coin})")
+            if no_task_count_coin >= max_no_task_coin:
+                print("✓ 连续多次未找到任务按钮，结束金币任务")
+                break
+            # 尝试滚动页面
+            print("[金币任务] 尝试滚动页面查找任务...")
+            d.swipe(screen_width // 2, screen_height * 2 // 3, screen_width // 2, screen_height // 3, 0.3)
+            time.sleep(2)
         time.sleep(4)
     except Exception as e:
         print("出现异常，继续下一轮", str(e))
@@ -551,6 +621,9 @@ else:
 
 # 执行体力任务
 have_clicked_physical = []  # 重置已点击列表，专门用于体力任务
+no_task_count = 0  # 连续未找到任务的计数
+max_no_task = 3  # 最多连续3次未找到任务才退出
+
 while True:
     try:
         # 检查任务进度
@@ -563,7 +636,15 @@ while True:
         if get_btn.exists:
             get_btn.click()
             time.sleep(3)
+        
+        # 尝试滚动查找"去完成"按钮
         to_btn = d(className="android.widget.Button", text="去完成")
+        if not to_btn.exists:
+            print("[体力任务] 未找到'去完成'按钮，尝试向下滚动...")
+            d.swipe(screen_width // 2, screen_height * 2 // 3, screen_width // 2, screen_height // 3, 0.3)
+            time.sleep(2)
+            to_btn = d(className="android.widget.Button", text="去完成")
+        
         if to_btn.exists:
             need_click_view = None
             need_click_index = 0
@@ -606,12 +687,44 @@ while True:
                     in_search = True
                     time.sleep(4)
                 operate_task()
+                no_task_count = 0  # 重置计数器
             else:
-                print("✓ 没有更多可执行的体力任务")
-                break
+                no_task_count += 1
+                print(f"[体力任务] 未找到可执行任务 ({no_task_count}/{max_no_task})")
+                if no_task_count >= max_no_task:
+                    print("✓ 连续多次未找到可执行任务，结束体力任务")
+                    break
+                # 尝试滚动页面
+                print("[体力任务] 尝试滚动页面查找更多任务...")
+                d.swipe(screen_width // 2, screen_height * 2 // 3, screen_width // 2, screen_height // 3, 0.3)
+                time.sleep(2)
         else:
-            print("✓ 没有更多体力任务")
-            break
+            no_task_count += 1
+            print(f"[体力任务] 未找到'去完成'按钮 ({no_task_count}/{max_no_task})")
+            if no_task_count >= max_no_task:
+                print("✓ 连续多次未找到任务按钮，结束体力任务")
+                break
+            
+            # 返回淘金币主页重新进入任务页面
+            print("[体力任务] 返回淘金币主页重新进入...")
+            d.press("back")
+            time.sleep(2)
+            
+            # 重新点击"赚体力"进入任务页面
+            physical_btn = d(text="赚体力")
+            if not physical_btn.exists:
+                physical_btn = d(textContains="赚体力")
+            
+            if physical_btn.exists:
+                print("[体力任务] 重新点击'赚体力'进入任务列表...")
+                bounds = physical_btn.info['bounds']
+                center_x = (bounds['left'] + bounds['right']) // 2
+                center_y = (bounds['top'] + bounds['bottom']) // 2
+                d.click(center_x, center_y)
+                time.sleep(3)
+            else:
+                print("[体力任务] ⚠ 未找到'赚体力'按钮，可能需要重新导航")
+        
         time.sleep(4)
     except Exception as e:
         print("出现异常，继续下一轮", str(e))
