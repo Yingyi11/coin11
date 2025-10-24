@@ -1,0 +1,5 @@
+uiautomator2>=3.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+ddddocr>=1.4.11
+Pillow>=10.0.0
