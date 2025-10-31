@@ -36,6 +36,7 @@ print("✓ 等待完成")
 in_search = False
 in_other_app = False
 have_clicked = []
+current_task_type = "coin"
 
 print("启动监视器上下文...")
 ctx = d.watch_context()
@@ -61,6 +62,8 @@ def close_all_dialog():
 
 
 def check_in_task():
+    """检查是否在任务界面，如果不在则返回False（不主动导航）"""
+    global current_task_type
     temp_package, temp_activity = get_current_app(d)
     if (
         temp_package == "com.taobao.taobao"
@@ -69,18 +72,24 @@ def check_in_task():
         phy_view = d(className="android.widget.TextView", text="做任务赚体力")
         if phy_view.exists(timeout=5):
             return True
-    elif (
-        temp_package == "com.taobao.taobao"
-        and temp_activity == "com.taobao.tao.welcome.Welcome"
-    ):
-        to_11()
-        return True
+    # 移除Welcome的自动导航逻辑，让返回流程自己处理
+    # elif (
+    #     temp_package == "com.taobao.taobao"
+    #     and temp_activity == "com.taobao.tao.welcome.Welcome"
+    # ):
+    #     to_11(task_type=current_task_type)
+    #     return True
     return False
 
 
-def to_11():
-    """导航到任务列表界面的完整流程"""
-    print("开始导航到任务列表界面...")
+def to_11(task_type="coin"):
+    """
+    导航到任务列表界面的完整流程
+    
+    参数:
+        task_type: 任务类型，"coin"=金币任务(默认), "physical"=体力任务
+    """
+    print(f"开始导航到任务列表界面 (任务类型: {'赚金币' if task_type == 'coin' else '赚体力'})...")
     max_attempts = 5
     attempt = 0
 
@@ -137,30 +146,40 @@ def to_11():
                 print(f"   点击坐标: ({center_x}, {center_y})")
                 time.sleep(4)  # 增加等待时间
 
-                # 第2步：等待页面切换，查找"赚金币"或"赚体力"（优先赚金币）
-                print("[to_11] 等待'赚金币'/'赚体力'按钮出现...")
+                # 第2步：等待页面切换，根据task_type查找对应按钮
+                target_text = "赚金币" if task_type == "coin" else "赚体力"
+                fallback_text = "赚体力" if task_type == "coin" else "赚金币"
+                print(f"[to_11] 等待'{target_text}'按钮出现...")
                 time.sleep(3)  # 增加等待时间
 
-                # 多种方式查找"赚金币"或"赚体力"按钮（优先查找赚金币）
+                # 多种方式查找按钮（优先查找目标类型）
                 physical_btn = None
 
-                # 优先尝试查找"赚金币"
-                physical_btn = d(text="赚金币")
+                # 优先尝试查找目标按钮
+                physical_btn = d(text=target_text)
                 if not physical_btn.exists:
-                    print("[to_11] 未找到'赚金币'，尝试'赚体力'...")
-                    physical_btn = d(text="赚体力")
+                    print(f"[to_11] 未找到'{target_text}'，尝试'{fallback_text}'...")
+                    physical_btn = d(text=fallback_text)
 
                 if not physical_btn.exists:
                     print("[to_11] 尝试textContains方式...")
-                    physical_btn = d(textContains="赚金币")
+                    # 优先查找目标类型
+                    physical_btn = d(textContains=target_text)
                     if not physical_btn.exists:
-                        physical_btn = d(textContains="赚体力")
+                        print(f"[to_11] textContains未找到'{target_text}'，尝试'{fallback_text}'...")
+                        physical_btn = d(textContains=fallback_text)
 
                 if not physical_btn.exists:
                     print("[to_11] 尝试通过Button查找...")
-                    physical_btn = d(
-                        className="android.widget.Button", textMatches=".*赚.*"
-                    )
+                    # 使用更精确的匹配，根据task_type决定
+                    if task_type == "coin":
+                        physical_btn = d(className="android.widget.Button", textMatches=".*金币.*")
+                        if not physical_btn.exists:
+                            physical_btn = d(className="android.widget.Button", textMatches=".*体力.*")
+                    else:
+                        physical_btn = d(className="android.widget.Button", textMatches=".*体力.*")
+                        if not physical_btn.exists:
+                            physical_btn = d(className="android.widget.Button", textMatches=".*金币.*")
 
                 if physical_btn.exists:
                     print(
@@ -264,7 +283,14 @@ def to_11():
     print("导航流程完成")
 
 
-def operate_task():
+def operate_task(is_search_task=False, task_type="coin"):
+    """
+    执行任务浏览和返回操作
+    
+    参数:
+        is_search_task: 是否是搜索类任务（需要多返回一次）
+        task_type: 任务类型，"coin"=金币任务, "physical"=体力任务
+    """
     start_time = time.time()
     cancel_btn = d(resourceId="android:id/button2", text="取消")
     if cancel_btn.exists:
@@ -293,9 +319,11 @@ def operate_task():
 
     # 返回到任务列表的逻辑
     back_count = 0
-    max_back = 8
+    max_back = 10  # 增加最大后退次数，处理跳转任务
     consecutive_welcome = 0
-    must_back_once = True  # 标记是否必须至少后退一次
+    # 搜索任务需要至少后退2次，普通任务至少1次
+    min_back_times = 2 if is_search_task else 1
+    had_external_app = False  # 是否经历过外部应用或其他页面
 
     while back_count < max_back:
         temp_package, temp_activity = get_current_app(d)
@@ -310,16 +338,20 @@ def operate_task():
             temp_package == "com.taobao.taobao"
             and temp_activity == "com.taobao.themis.container.app.TMSActivity"
         ):
-            if must_back_once and back_count == 0:
-                # 第一次检测到任务界面，必须后退一次（因为可能刚完成任务还在任务详情页）
-                print("在任务界面，但需要至少后退一次确保回到任务列表")
+            # 如果之前经历过外部应用或其他页面，至少要后退2次
+            if had_external_app and min_back_times < 2:
+                min_back_times = 2
+                print("检测到之前跳转过其他页面，增加最小后退次数到2次")
+            
+            if back_count < min_back_times:
+                # 还没达到最小后退次数
+                print(f"在任务界面，但还需要后退 {min_back_times - back_count} 次确保回到任务列表")
                 d.press("back")
                 time.sleep(1)
                 back_count += 1
-                must_back_once = False
                 continue
             else:
-                print("✓ 已在任务列表界面，停止后退")
+                print(f"✓ 已在任务列表界面，停止后退（共后退 {back_count} 次）")
                 break
 
         # 成功返回到任务列表（使用check_in_task进一步验证）
@@ -330,28 +362,54 @@ def operate_task():
         # Welcome 界面处理
         if temp_activity == "com.taobao.tao.welcome.Welcome":
             consecutive_welcome += 1
-            if consecutive_welcome >= 2:
+            # 修改策略：如果已经完成了足够的后退次数，直接导航
+            if back_count >= min_back_times:
+                print(
+                    f"⚠ 已后退{back_count}次后到达Welcome界面，直接导航到任务列表"
+                )
+                to_11(task_type=task_type)
+                break
+            elif consecutive_welcome >= 2:
                 print(
                     f"⚠ 连续检测到 Welcome {consecutive_welcome} 次，停止返回，调用 to_11() 重新导航"
                 )
-                to_11()
+                to_11(task_type=task_type)
                 break
-            print("检测到 Welcome 界面，再尝试后退一次")
-            d.press("back")
-            time.sleep(1)
-            back_count += 1
+            else:
+                print(f"检测到 Welcome 界面，再尝试后退一次 (已后退{back_count}次，需要{min_back_times}次)")
+                d.press("back")
+                time.sleep(1)
+                back_count += 1
 
-        # 启动器界面处理
-        elif (
-            temp_activity == "com.bbk.launcher2.Launcher"
-            or "com.taobao.taobao" not in temp_package
-        ):
-            print("✗ 到达启动器或非淘宝应用，停止返回，调用 to_11() 重新导航")
-            to_11()
-            break
+        # 跳转到外部应用处理（支付宝、百度等跳转任务）
+        elif "com.taobao.taobao" not in temp_package:
+            had_external_app = True  # 标记经历过外部应用
+            if temp_activity == "com.bbk.launcher2.Launcher":
+                # 到达启动器，说明后退过头了
+                print("✗ 到达启动器界面，重新导航")
+                to_11(task_type=task_type)
+                break
+            else:
+                # 在外部应用（支付宝、百度等），继续后退尝试回到淘宝
+                print(f"检测到外部应用: {temp_package}，继续后退尝试返回淘宝")
+                d.press("back")
+                time.sleep(1.5)  # 等待时间长一些，给应用切换时间
+                back_count += 1
+                
+                # 如果后退多次仍在外部应用，尝试直接启动淘宝
+                if back_count >= 5 and "com.taobao.taobao" not in temp_package:
+                    print("⚠ 多次后退仍在外部应用，直接启动淘宝重新导航")
+                    d.app_start("com.taobao.taobao")
+                    time.sleep(3)
+                    to_11(task_type=task_type)
+                    break
 
-        # 淘宝内部界面，继续后退
+        # 淘宝内部其他界面，继续后退
         else:
+            # 如果不是TMSActivity，说明在其他淘宝页面（如闪购页等）
+            if temp_activity != "com.taobao.themis.container.app.TMSActivity":
+                had_external_app = True  # 标记经历过其他页面
+            
             print("点击后退")
             d.press("back")
             time.sleep(0.5)
@@ -431,13 +489,28 @@ while True:
             get_btn.click()
             time.sleep(3)
         
-        # 尝试滚动查找"去完成"按钮
-        to_btn = d(className="android.widget.Button", text="去完成")
+        # 查找任务按钮（支持多种文本，使用正则匹配）
+        # 匹配："去完成"、"去逛逛"、"逛一逛"、"去浏览"、"去查看"等
+        to_btn = d(className="android.widget.Button", textMatches="去完成|去逛逛|逛一逛")
+        
         if not to_btn.exists:
-            print("[金币任务] 未找到'去完成'按钮，尝试向下滚动...")
+            print("[金币任务] 未找到任务按钮，尝试向下滚动...")
             d.swipe(screen_width // 2, screen_height * 2 // 3, screen_width // 2, screen_height // 3, 0.3)
             time.sleep(2)
-            to_btn = d(className="android.widget.Button", text="去完成")
+            # 滚动后重新查找
+            to_btn = d(className="android.widget.Button", textMatches="去完成|去逛逛|逛一逛")
+            
+            # 如果还找不到，打印当前页面所有按钮文本用于调试
+            if not to_btn.exists:
+                print("[金币任务] [调试] 仍未找到任务按钮，打印当前页面所有Button:")
+                all_buttons = d(className="android.widget.Button")
+                for i, btn in enumerate(all_buttons):
+                    try:
+                        btn_text = btn.get_text()
+                        if btn_text and btn_text.strip():
+                            print(f"   Button[{i}]: '{btn_text}'")
+                    except:
+                        pass
         
         if to_btn.exists:
             need_click_view = None
@@ -472,48 +545,57 @@ while True:
                     ),
                 )
                 time.sleep(4)
+                
+                # 检测是否是搜索任务
+                is_search = False
                 search_view = d(className="android.view.View", text="搜索有福利")
                 if search_view.exists:
                     d(className="android.widget.EditText", instance=0).send_keys(
                         "笔记本电脑"
                     )
                     d(className="android.widget.Button", text="搜索").click()
+                    is_search = True
                     in_search = True
                     time.sleep(4)
-                operate_task()
+                
+                # 执行任务，传入任务类型
+                operate_task(is_search_task=is_search, task_type="coin")
                 no_task_count_coin = 0  # 重置计数器
             else:
                 no_task_count_coin += 1
-                print(f"[金币任务] 未找到可执行任务 ({no_task_count_coin}/{max_no_task_coin})")
+                print(f"[金币任务] 未找到可执行的任务按钮 ({no_task_count_coin}/{max_no_task_coin})")
                 if no_task_count_coin >= max_no_task_coin:
-                    print("✓ 连续多次未找到可执行任务，结束金币任务")
-                    break
-                
-                # 返回淘金币主页重新进入任务页面
-                print("[金币任务] 返回淘金币主页重新进入...")
-                d.press("back")
-                time.sleep(2)
-                
-                # 重新点击"赚金币"进入任务页面
-                coin_btn = d(text="赚金币")
-                if not coin_btn.exists:
-                    coin_btn = d(textContains="赚金币")
-                
-                if coin_btn.exists:
-                    print("[金币任务] 重新点击'赚金币'进入任务列表...")
-                    bounds = coin_btn.info['bounds']
-                    center_x = (bounds['left'] + bounds['right']) // 2
-                    center_y = (bounds['top'] + bounds['bottom']) // 2
-                    d.click(center_x, center_y)
+                    print("⚠ 连续多次未找到任务按钮，可能页面状态异常")
+                    print("   重新启动淘宝并导航到金币任务界面...")
+                    d.app_stop("com.taobao.taobao")
+                    time.sleep(2)
+                    d.app_start("com.taobao.taobao")
                     time.sleep(3)
-                else:
-                    print("[金币任务] ⚠ 未找到'赚金币'按钮，可能需要重新导航")
+                    to_11(task_type="coin")
+                    time.sleep(2)
+                    # 重置计数器，给一次机会
+                    no_task_count_coin = 0
+                    continue
+                
+                # 尝试滚动页面查找更多任务
+                print("[金币任务] 尝试滚动页面查找任务...")
+                d.swipe(screen_width // 2, screen_height * 2 // 3, screen_width // 2, screen_height // 3, 0.3)
+                time.sleep(2)
         else:
             no_task_count_coin += 1
-            print(f"[金币任务] 未找到'去完成'按钮 ({no_task_count_coin}/{max_no_task_coin})")
+            print(f"[金币任务] 未找到任务按钮('去完成'/'去逛逛'/'逛一逛') ({no_task_count_coin}/{max_no_task_coin})")
             if no_task_count_coin >= max_no_task_coin:
-                print("✓ 连续多次未找到任务按钮，结束金币任务")
-                break
+                print("⚠ 连续多次未找到任务按钮，可能页面状态异常")
+                print("   重新启动淘宝并导航到金币任务界面...")
+                d.app_stop("com.taobao.taobao")
+                time.sleep(2)
+                d.app_start("com.taobao.taobao")
+                time.sleep(3)
+                to_11(task_type="coin")
+                time.sleep(2)
+                # 重置计数器，给一次机会
+                no_task_count_coin = 0
+                continue
             # 尝试滚动页面
             print("[金币任务] 尝试滚动页面查找任务...")
             d.swipe(screen_width // 2, screen_height * 2 // 3, screen_width // 2, screen_height // 3, 0.3)
@@ -526,6 +608,10 @@ while True:
 print("\n" + "=" * 60)
 print("第二阶段：切换到赚体力任务")
 print("=" * 60)
+
+# 更新当前任务类型为体力任务
+current_task_type = "physical"
+print(f"[切换体力] 已更新任务类型为: {current_task_type}")
 
 # 检查当前界面，如果在任务界面，先返回到淘金币主页
 package_name, activity_name = get_current_app(d)
@@ -637,13 +723,28 @@ while True:
             get_btn.click()
             time.sleep(3)
         
-        # 尝试滚动查找"去完成"按钮
-        to_btn = d(className="android.widget.Button", text="去完成")
+        # 查找任务按钮（支持多种文本，使用正则匹配）
+        # 匹配："去完成"、"去逛逛"、"逛一逛"、"去浏览"、"去查看"等
+        to_btn = d(className="android.widget.Button", textMatches="去完成|去逛逛|逛一逛")
+        
         if not to_btn.exists:
-            print("[体力任务] 未找到'去完成'按钮，尝试向下滚动...")
+            print("[体力任务] 未找到任务按钮，尝试向下滚动...")
             d.swipe(screen_width // 2, screen_height * 2 // 3, screen_width // 2, screen_height // 3, 0.3)
             time.sleep(2)
-            to_btn = d(className="android.widget.Button", text="去完成")
+            # 滚动后重新查找
+            to_btn = d(className="android.widget.Button", textMatches="去完成|去逛逛|逛一逛")
+            
+            # 如果还找不到，打印当前页面所有按钮文本用于调试
+            if not to_btn.exists:
+                print("[体力任务] [调试] 仍未找到任务按钮，打印当前页面所有Button:")
+                all_buttons = d(className="android.widget.Button")
+                for i, btn in enumerate(all_buttons):
+                    try:
+                        btn_text = btn.get_text()
+                        if btn_text and btn_text.strip():
+                            print(f"   Button[{i}]: '{btn_text}'")
+                    except:
+                        pass
         
         if to_btn.exists:
             need_click_view = None
@@ -678,52 +779,61 @@ while True:
                     ),
                 )
                 time.sleep(4)
+                
+                # 检测是否是搜索任务
+                is_search = False
                 search_view = d(className="android.view.View", text="搜索有福利")
                 if search_view.exists:
                     d(className="android.widget.EditText", instance=0).send_keys(
                         "笔记本电脑"
                     )
                     d(className="android.widget.Button", text="搜索").click()
+                    is_search = True
                     in_search = True
                     time.sleep(4)
-                operate_task()
+                
+                # 执行任务，传入任务类型
+                operate_task(is_search_task=is_search, task_type="physical")
                 no_task_count = 0  # 重置计数器
             else:
                 no_task_count += 1
-                print(f"[体力任务] 未找到可执行任务 ({no_task_count}/{max_no_task})")
+                print(f"[体力任务] 未找到可执行的任务按钮 ({no_task_count}/{max_no_task})")
                 if no_task_count >= max_no_task:
-                    print("✓ 连续多次未找到可执行任务，结束体力任务")
-                    break
+                    print("⚠ 连续多次未找到可执行任务，可能页面状态异常")
+                    print("   重新启动淘宝并导航到体力任务界面...")
+                    d.app_stop("com.taobao.taobao")
+                    time.sleep(2)
+                    d.app_start("com.taobao.taobao")
+                    time.sleep(3)
+                    to_11(task_type="physical")
+                    time.sleep(2)
+                    # 重置计数器，给一次机会
+                    no_task_count = 0
+                    continue
                 # 尝试滚动页面
                 print("[体力任务] 尝试滚动页面查找更多任务...")
                 d.swipe(screen_width // 2, screen_height * 2 // 3, screen_width // 2, screen_height // 3, 0.3)
                 time.sleep(2)
         else:
             no_task_count += 1
-            print(f"[体力任务] 未找到'去完成'按钮 ({no_task_count}/{max_no_task})")
+            print(f"[体力任务] 未找到任务按钮('去完成'/'去逛逛'/'逛一逛') ({no_task_count}/{max_no_task})")
             if no_task_count >= max_no_task:
-                print("✓ 连续多次未找到任务按钮，结束体力任务")
-                break
-            
-            # 返回淘金币主页重新进入任务页面
-            print("[体力任务] 返回淘金币主页重新进入...")
-            d.press("back")
-            time.sleep(2)
-            
-            # 重新点击"赚体力"进入任务页面
-            physical_btn = d(text="赚体力")
-            if not physical_btn.exists:
-                physical_btn = d(textContains="赚体力")
-            
-            if physical_btn.exists:
-                print("[体力任务] 重新点击'赚体力'进入任务列表...")
-                bounds = physical_btn.info['bounds']
-                center_x = (bounds['left'] + bounds['right']) // 2
-                center_y = (bounds['top'] + bounds['bottom']) // 2
-                d.click(center_x, center_y)
+                print("⚠ 连续多次未找到任务按钮，可能页面状态异常")
+                print("   重新启动淘宝并导航到体力任务界面...")
+                d.app_stop("com.taobao.taobao")
+                time.sleep(2)
+                d.app_start("com.taobao.taobao")
                 time.sleep(3)
-            else:
-                print("[体力任务] ⚠ 未找到'赚体力'按钮，可能需要重新导航")
+                to_11(task_type="physical")
+                time.sleep(2)
+                # 重置计数器，给一次机会
+                no_task_count = 0
+                continue
+            
+            # 尝试滚动页面查找更多任务
+            print("[体力任务] 尝试滚动页面查找任务...")
+            d.swipe(screen_width // 2, screen_height * 2 // 3, screen_width // 2, screen_height // 3, 0.3)
+            time.sleep(2)
         
         time.sleep(4)
     except Exception as e:
