@@ -1,0 +1,41 @@
+# 淘宝双11自动化脚本配置文件
+# 可根据需要调整各项参数
+
+# 应用配置
+app:
+  package_name: "com.taobao.taobao"  # 淘宝应用包名
+  launch_wait_time: 3  # 启动应用后等待时间（秒）
+
+# 任务配置
+task:
+  coin:
+    target_count: 40  # 金币任务目标次数
+    enabled: false  # 是否执行金币任务
+  physical:
+    target_count: 50  # 体力任务目标次数
+    enabled: true  # 是否执行体力任务
+  jump:
+    enabled: true  # 是否执行跳一跳
+    min_physical: 10  # 最少保留体力值
+
+# 操作配置
+operation:
+  browse_duration: 16  # 浏览任务内容的时长（秒）
+  swipe:
+    min_duration: 0.2  # 最小滑动时长（秒）
+    max_duration: 1.0  # 最大滑动时长（秒）
+  wait_between_tasks: 2  # 任务间等待时间（秒）
+  search_keyword: "笔记本电脑"  # 搜索任务的关键词
+
+# 重试配置
+retry:
+  max_back_times: 10  # 最大后退次数
+  min_back_times_search: 2  # 搜索任务最小后退次数
+  min_back_times_normal: 1  # 普通任务最小后退次数
+  max_no_task_count: 3  # 连续未找到任务的最大次数
+  navigation_max_attempts: 5  # 导航到任务界面的最大尝试次数
+
+# 调试配置
+debug:
+  print_buttons: true  # 是否打印页面按钮信息（调试用）
+  verbose: true  # 是否输出详细日志

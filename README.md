@@ -4,13 +4,16 @@
 
 ## 功能特点
 
-- ✅ 自动完成淘金币任务（目标40次）
-- ✅ 自动完成赚体力任务（目标40次）
-- ✅ 自动跳一跳游戏
+- ✅ 自动完成淘金币任务（默认目标40次，可配置）
+- ✅ 自动完成赚体力任务（默认目标50次，可配置）
+- ✅ 自动跳一跳游戏（可配置保留体力值）
 - ✅ 智能任务过滤（排除需要人工参与的任务）
 - ✅ 自动处理弹窗和广告
 - ✅ 进度检查和任务完成提示
-
+- ✅ 支持配置文件和命令行参数
+- ✅ **Hydra配置管理**：通过配置文件轻松调整所有参数
+- ✅ **灵活的任务控制**：可以选择性开启/关闭金币、体力、跳一跳任务
+- ✅ **命令行参数覆盖**：无需修改文件即可临时调整配置
 ---
 
 ## 快速开始
@@ -29,10 +32,41 @@ pip install -r requirements.txt
 - 在手机上开启 **USB 调试** 模式
 - 确认手机授权弹窗
 
-#### 3. 运行脚本
+#### 3. 配置任务参数（可选）
 
+编辑 `conf/config.yaml` 文件，调整任务参数：
+
+```yaml
+task:
+  coin:
+    target_count: 40  # 金币任务目标次数
+    enabled: true     # 是否执行
+  physical:
+    target_count: 50  # 体力任务目标次数
+    enabled: true
+  jump:
+    enabled: true     # 是否执行跳一跳
+    min_physical: 10  # 最少保留体力
+```
+
+
+#### 4. 运行脚本
+
+**基础运行：**
 ```bash
 python "2025淘宝双11.py"
+```
+
+**使用命令行参数（无需修改配置文件）：**
+```bash
+# 只做金币任务
+python "2025淘宝双11.py" task.physical.enabled=false task.jump.enabled=false
+
+# 修改目标次数
+python "2025淘宝双11.py" task.coin.target_count=50
+
+# 加快浏览速度
+python "2025淘宝双11.py" operation.browse_duration=15
 ```
 
 或使用 conda：
