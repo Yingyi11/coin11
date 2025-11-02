@@ -66,16 +66,20 @@ def build_exe():
         "--onedir",  # 使用单目录模式，方便携带 ADB
         "--console",  # 显示控制台窗口，方便查看日志和关闭程序
         "--icon=NONE",
-        "--add-data=utils.py;.",
+        "--add-data=utils;utils",  # 添加 utils 目录
+        "--add-data=conf;conf",  # 添加 conf 配置目录
         "--add-data=platform-tools;platform-tools",
         "--hidden-import=uiautomator2",
         "--hidden-import=cv2",
         "--hidden-import=numpy",
         "--hidden-import=ddddocr",
         "--hidden-import=PIL",
+        "--hidden-import=omegaconf",  # 添加 hydra 相关
+        "--hidden-import=hydra",
         "--collect-all=uiautomator2",
         "--collect-all=cv2",
         "--collect-all=ddddocr",
+        "--collect-all=omegaconf",
         "2025淘宝双11.py"
     ]
     
@@ -137,9 +141,38 @@ def create_readme():
    - 在手机上开启"USB 调试"模式
    - 首次连接需要在手机上确认授权
 
-2. **运行程序**
+2. **调整配置（可选）**
+   - 编辑 `conf/config.yaml` 文件
+   - 可以修改任务目标次数、开关任务等
+   - 详细说明请查看 README.md
+
+3. **运行程序**
    - 双击 `launcher.bat` 启动程序
    - 或直接双击 `淘宝双11自动化工具.exe`
+
+## 配置说明
+
+程序支持通过配置文件调整行为，主要配置项：
+
+### 任务开关
+```yaml
+task:
+  coin:
+    enabled: true      # 是否做金币任务
+    target_count: 40   # 目标次数
+  physical:
+    enabled: true      # 是否做体力任务
+    target_count: 50
+  jump:
+    enabled: true      # 是否跳一跳
+```
+
+### 操作速度
+```yaml
+operation:
+  browse_duration: 18  # 浏览时长（秒），可改小加快速度
+  wait_between_tasks: 4  # 任务间等待（秒）
+```
 
 ## 重要提示
 
@@ -147,6 +180,7 @@ def create_readme():
 - 不要手动操作手机，让程序自动执行
 - 确保手机已安装淘宝 App
 - 首次使用建议先测试几个任务，确认运行正常
+- 可以通过修改配置文件自定义任务参数
 
 ## 开启 USB 调试
 
@@ -236,8 +270,10 @@ def main():
     print("  - 淘宝双11自动化工具.exe  (主程序)")
     print("  - launcher.bat          (启动器)")
     print("  - 使用说明.txt           (使用文档)")
+    print("  - conf/config.yaml      (配置文件，可修改)")
     print("  - platform-tools/       (ADB 工具)")
     print("  - _internal/            (程序依赖)")
+    print("\n✨ 新功能：用户可以通过编辑 conf/config.yaml 来调整任务参数！")
 
 if __name__ == "__main__":
     main()

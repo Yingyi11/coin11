@@ -5,6 +5,7 @@
 使用 Hydra 加载和管理配置
 """
 
+import sys
 from pathlib import Path
 from omegaconf import DictConfig, OmegaConf
 
@@ -19,8 +20,16 @@ class Config:
         Args:
             config_path: 配置文件路径
         """
-        # 获取项目根目录（utils的上一级目录）
-        project_root = Path(__file__).parent.parent
+        # 获取项目根目录
+        # 如果是打包后的环境，使用 exe 所在目录
+        # 如果是开发环境，使用脚本文件的上一级目录
+        if getattr(sys, 'frozen', False):
+            # 打包后的环境：使用 exe 所在目录
+            project_root = Path(sys.executable).parent
+        else:
+            # 开发环境：使用 utils 的上一级目录
+            project_root = Path(__file__).parent.parent
+        
         full_path = project_root / config_path
         
         if not full_path.exists():

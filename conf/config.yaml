@@ -10,7 +10,7 @@ app:
 task:
   coin:
     target_count: 40  # 金币任务目标次数
-    enabled: false  # 是否执行金币任务
+    enabled: true  # 是否执行金币任务
   physical:
     target_count: 50  # 体力任务目标次数
     enabled: true  # 是否执行体力任务

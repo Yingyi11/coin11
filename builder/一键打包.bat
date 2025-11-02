@@ -36,9 +36,44 @@ echo [1/4] 安装 Python 依赖包...
 echo.
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+echo.
+echo 确保关键配置管理包已安装...
+pip install omegaconf>=2.3.0 hydra-core>=1.3.0 PyYAML>=6.0 antlr4-python3-runtime==4.9.*
+if errorlevel 1 (
+    echo ✗ 配置管理包安装失败
+    pause
+    exit /b 1
+)
+echo.
 pip install pyinstaller
 echo.
-echo ✓ 依赖安装完成
+echo 验证关键包安装...
+python -c "import omegaconf; print('✓ omegaconf:', omegaconf.__version__)"
+if errorlevel 1 (
+    echo ✗ omegaconf 导入失败，请检查安装
+    pause
+    exit /b 1
+)
+python -c "import hydra; print('✓ hydra:', hydra.__version__)"
+if errorlevel 1 (
+    echo ✗ hydra 导入失败，请检查安装
+    pause
+    exit /b 1
+)
+python -c "import yaml; print('✓ PyYAML:', yaml.__version__)"
+if errorlevel 1 (
+    echo ✗ PyYAML 导入失败，请检查安装
+    pause
+    exit /b 1
+)
+python -c "import antlr4; print('✓ antlr4-python3-runtime 已安装')"
+if errorlevel 1 (
+    echo ✗ antlr4 导入失败，请检查安装
+    pause
+    exit /b 1
+)
+echo.
+echo ✓ 所有依赖安装并验证完成
 echo.
 
 REM 下载 ADB（如果不存在）
@@ -71,7 +106,8 @@ echo.
 pyinstaller --name=淘宝双11自动化工具 ^
     --onedir ^
     --console ^
-    --add-data="utils.py;." ^
+    --add-data="utils;utils" ^
+    --add-data="conf;conf" ^
     --add-data="platform-tools;platform-tools" ^
     --hidden-import=uiautomator2 ^
     --hidden-import=cv2 ^
@@ -79,7 +115,22 @@ pyinstaller --name=淘宝双11自动化工具 ^
     --hidden-import=ddddocr ^
     --hidden-import=PIL ^
     --hidden-import=PIL.Image ^
+    --hidden-import=omegaconf ^
+    --hidden-import=omegaconf.dictconfig ^
+    --hidden-import=omegaconf.listconfig ^
+    --hidden-import=omegaconf.base ^
+    --hidden-import=omegaconf._impl ^
+    --hidden-import=omegaconf.resolvers ^
+    --hidden-import=antlr4 ^
+    --hidden-import=antlr4.tree.Tree ^
+    --hidden-import=hydra ^
+    --hidden-import=hydra.core ^
+    --hidden-import=hydra.core.config_store ^
+    --hidden-import=yaml ^
     --collect-all=uiautomator2 ^
+    --collect-all=omegaconf ^
+    --collect-all=hydra ^
+    --collect-all=antlr4 ^
     "2025淘宝双11.py"
 
 if errorlevel 1 (
@@ -93,6 +144,16 @@ REM 创建启动器
 echo.
 echo 创建启动器和使用说明...
 cd dist\淘宝双11自动化工具
+
+REM 复制配置文件到输出目录
+echo 复制配置文件到输出目录...
+if exist "..\..\conf" (
+    xcopy /E /I /Y "..\..\conf" "conf" >nul
+    echo ✓ 配置文件复制完成
+) else (
+    echo ⚠ 警告: 未找到 conf 目录
+)
+echo.
 
 REM 复制 platform-tools 到输出目录
 echo 复制 ADB 工具到输出目录...
@@ -152,12 +213,28 @@ echo    - 使用 USB 数据线连接手机到电脑
 echo    - 在手机上开启 "USB 调试" 模式
 echo    - 首次连接需要在手机上确认授权
 echo.
-echo 2. 运行程序
-echo    - 双击 launcher.bat 启动程序
-echo    - 或直接双击 淘宝双11自动化工具.exe
-echo (不建议直接运行exe,可能会无法自动运行,需要回车才能下一步)
+echo 2. 调整配置（可选）
+echo    - 配置文件位置: conf\config.yaml（与 exe 同级目录）
+echo    - 可以修改任务目标次数、开关任务等
+echo    - 例如: 将 enabled: false 改为 enabled: true 来开启某个任务
+echo    - 修改后保存即可，无需重新打包
+echo    - 注意: 请用文本编辑器打开，保持 YAML 格式正确
 echo.
-echo 二、开启 USB 调试
+echo 3. 运行程序
+echo    - 双击 launcher.bat 启动程序（推荐）
+echo    - 或直接双击 淘宝双11自动化工具.exe
+echo.
+echo 二、配置说明
+echo.
+echo 主要配置项（conf\config.yaml）:
+echo   - task.coin.enabled: true/false    # 是否做金币任务
+echo   - task.coin.target_count: 40       # 金币任务目标次数
+echo   - task.physical.enabled: true/false # 是否做体力任务
+echo   - task.physical.target_count: 50   # 体力任务目标次数
+echo   - task.jump.enabled: true/false    # 是否跳一跳
+echo   - operation.browse_duration: 18    # 浏览时长（秒），可改小加快速度
+echo.
+echo 三、开启 USB 调试
 echo.
 echo 小米/Redmi:
 echo   设置 → 我的设备 → 全部参数 → 连续点击"MIUI版本"7次
@@ -171,23 +248,50 @@ echo OPPO/Vivo:
 echo   设置 → 关于手机 → 连续点击"版本号"7次
 echo   设置 → 其他设置 → 开发者选项 → 开启"USB调试"
 echo.
-echo 三、重要提示
+echo 四、重要提示
 echo.
 echo - 程序运行时请保持手机屏幕常亮
 echo - 不要手动操作手机，让程序自动执行
 echo - 确保手机已安装淘宝 App
 echo - 首次使用建议先测试几个任务
+echo - 可以通过修改配置文件自定义任务参数
+echo - 配置文件支持热修改，无需重新打包
 echo.
-echo 四、常见问题
+echo 五、常见问题
 echo.
 echo Q: 提示找不到设备？
 echo A: 检查 USB 连接、USB 调试是否开启、重新授权
 echo.
 echo Q: 程序运行后没有反应？
 echo A: 确保淘宝已安装、手机已解锁、关闭弹窗
-) > 使用说明.txt
+) > README.txt
 
 cd ..\..
+
+echo.
+echo 验证打包结果...
+set "output_dir=dist\淘宝双11自动化工具"
+
+REM 检查关键文件
+set missing_files=0
+if not exist "%output_dir%\淘宝双11自动化工具.exe" (
+    echo ✗ 主程序不存在
+    set missing_files=1
+)
+if not exist "%output_dir%\conf\config.yaml" (
+    echo ✗ 配置文件不存在
+    set missing_files=1
+)
+if not exist "%output_dir%\launcher.bat" (
+    echo ✗ 启动器不存在
+    set missing_files=1
+)
+
+if %missing_files%==1 (
+    echo.
+    echo ⚠ 警告: 部分关键文件缺失，请检查打包过程
+    echo.
+)
 
 echo.
 echo ====================================================
@@ -199,9 +303,13 @@ echo.
 echo 文件清单:
 echo   - 淘宝双11自动化工具.exe  (主程序)
 echo   - launcher.bat            (启动器，推荐使用)
-echo   - 使用说明.txt             (使用文档)
+echo   - README.txt              (使用文档)
+echo   - conf\config.yaml        (配置文件，可修改)
+echo   - utils/                  (工具模块)
 echo   - platform-tools/         (ADB工具)
 echo   - _internal/              (程序依赖)
+echo.
+echo ✨ 新功能: 用户可以通过编辑 conf\config.yaml 来调整任务参数！
 echo.
 echo 请将整个 "淘宝双11自动化工具" 文件夹分发给用户
 echo 用户双击 launcher.bat 即可运行
