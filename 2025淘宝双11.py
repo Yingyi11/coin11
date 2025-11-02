@@ -712,9 +712,9 @@ max_no_task = 3  # 最多连续3次未找到任务才退出
 
 while True:
     try:
-        # 检查任务进度
-        if check_task_progress(40):
-            print("✓ 体力任务进度已达到40次，结束体力任务")
+        # 检查任务进度（体力任务目标设置为50次，确保能打满）
+        if check_task_progress(50):
+            print("✓ 体力任务进度已达到50次，结束体力任务")
             break
 
         print("开始查找体力任务。。。")
